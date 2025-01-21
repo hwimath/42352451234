@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>근과 계수의 관계(곱셈법칙)</title>
+  <!-- MathJax 로드 (LaTeX 수식 렌더링) -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    defer
+  ></script>
+  <style>
+    body {
+      background-color: #ffffff;  /* 흰 배경 */
+      color: #000000;            /* 검은 글자 */
+      font-family: sans-serif;
+      margin: 20px;
+    }
+    .hidden { display: none; }
+    .energy-bar {
+      width: 200px; height: 20px;
+      border: 1px solid #000;
+      background-color: #fff;
+      position: relative;
+      margin: 10px 0;
+    }
+    .energy-fill {
+      background-color: #000; /* 검정색으로 차오르게 */
+      height: 100%;
+      width: 100%;
+      transition: width 0.2s linear;
+    }
+    .question-box {
+      border: 1px solid #000;
+      padding: 10px;
+      margin: 10px 0;
+    }
+    .choices-container {
+      margin-top: 10px;
+    }
+    button {
+      background-color: #000;
+      color: #fff;
+      border: none;
+      padding: 8px 12px;
+      cursor: pointer;
+      margin-right: 5px;
+    }
+    button:hover {
+      opacity: 0.8;
+    }
+    #response {
+      white-space: pre-wrap;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>근과 계수의 관계(곱셈법칙)</h1>
+
+<!-- 첫 화면: 사용자 이름 / 난이도 선택 -->
+<div id="start-screen">
+  <label>이름: <input type="text" id="playerName" /></label>
+  <br><br>
+  난이도 선택:
+  <select id="difficulty">
+    <option value="highest">최상 (20초/문제, 20점)</option>
+    <option value="high">상 (30초/문제, 15점)</option>
+    <option value="mid">중 (40초/문제, 13점)</option>
+    <option value="low">하 (무제한, 10점)</option>
+  </select>
+  <br><br>
+  <button onclick="startGame()">게임 시작</button>
+</div>
+
+<!-- 실제 게임 화면 -->
+<div id="game-screen" class="hidden">
+  <div>
+    <div>남은 기회: <span id="lives">3</span></div>
+    <div>현재 점수: <span id="score">0</span></div>
+    <div>전체 경과 시간: <span id="elapsed-time">0</span> 초</div>
+  </div>
+
+  <div class="energy-bar" id="energyBar">
+    <div class="energy-fill" id="energyFill"></div>
+  </div>
+
+  <div class="question-box">
+    <div id="question-text"></div>
+    <div class="choices-container" id="choices-container"></div>
+  </div>
+</div>
+
+<!-- 게임 종료 화면 -->
+<div id="end-screen" class="hidden">
+  <h2>게임 종료</h2>
+  <p>최종 점수: <span id="final-score"></span></p>
+  <button onclick="sendScore()">점수전송</button>
+  <div id="response"></div>
+</div>
+
+<script>
+  // ---------------------------------------------
+  //  1) 문제 데이터 (48문항, 전부 무작위 출제)
+  //     각 문제: { condition, choices, correctIndex }
+  // ---------------------------------------------
+
+  const questionData = [
+    {
+      condition: "이차방정식 \\( x^2 - 3x - 4 = 0 \\)의 두 근을 \\(\\alpha,\\beta\\)라 할 때, \\(\\alpha + \\beta\\)의 값은 얼마인가?",
+      choices: ["\\(-4\\)", "\\(3\\)", "\\(4\\)", "\\(-3\\)"],
+      correctIndex: 1  // (2) 3
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 3x - 4 = 0 \\)의 두 근을 \\(\\alpha,\\beta\\)라 할 때, \\(\\alpha\\beta\\)의 값은 얼마인가?",
+      choices: ["\\(-4\\)", "\\(4\\)", "\\(-3\\)", "\\(3\\)"],
+      correctIndex: 0  // (1) -4
+    },
+    {
+      condition: "이차방정식 \\( x^2 + 3x + 1 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha + \\beta\\)의 값은 얼마인가?",
+      choices: ["\\(-3\\)", "\\(1\\)", "\\(-1\\)", "\\(3\\)"],
+      correctIndex: 0  // (1) -3
+    },
+    {
+      condition: "이차방정식 \\( x^2 + 3x + 1 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha\\beta\\)의 값은 얼마인가?",
+      choices: ["\\(-1\\)", "\\(1\\)", "\\(3\\)", "\\(-3\\)"],
+      correctIndex: 1  // (2) 1
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 4x - 5 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha + \\beta\\)의 값은 얼마인가?",
+      choices: ["\\(-4\\)", "\\(5\\)", "\\(-5\\)", "\\(4\\)"],
+      correctIndex: 3  // (4) 4
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 4x - 5 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha\\beta\\)의 값은 얼마인가?",
+      choices: ["\\(-5\\)", "\\(5\\)", "\\(4\\)", "\\(-4\\)"],
+      correctIndex: 0  // (1) -5
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 4x + 7 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha + \\beta\\)의 값은 얼마인가?",
+      choices: ["\\(-4\\)", "\\(4\\)", "\\(7\\)", "\\(-7\\)"],
+      correctIndex: 1  // (2) 4
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 4x + 7 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha\\beta\\)의 값은 얼마인가?",
+      choices: ["\\(-7\\)", "\\(-4\\)", "\\(7\\)", "\\(4\\)"],
+      correctIndex: 2  // (3) 7
+    },
+    {
+      condition: "이차방정식 \\( x^2 + 4 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha + \\beta\\)의 값은 얼마인가?",
+      choices: ["\\(4\\)", "\\(-4\\)", "\\(0\\)", "\\(2\\)"],
+      correctIndex: 2  // (3) 0
+    },
+    {
+      condition: "이차방정식 \\( x^2 + 4 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha\\beta\\)의 값은 얼마인가?",
+      choices: ["\\(-4\\)", "\\(4\\)", "\\(2\\)", "\\(-2\\)"],
+      correctIndex: 1  // (2) 4
+    },
+    {
+      condition: "이차방정식 \\( x^2 + 4x + 2 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha + \\beta\\)의 값은 얼마인가?",
+      choices: ["\\(4\\)", "\\(-4\\)", "\\(-2\\)", "\\(2\\)"],
+      correctIndex: 1  // (2) -4
+    },
+    {
+      condition: "이차방정식 \\( x^2 + 4x + 2 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha\\beta\\)의 값은 얼마인가?",
+      choices: ["\\(-2\\)", "\\(4\\)", "\\(2\\)", "\\(-4\\)"],
+      correctIndex: 2  // (3) 2
+    },
+    {
+      condition: "이차방정식 \\( 3x^2 + 3x + 1 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha + \\beta\\)의 값은 얼마인가?",
+      choices: ["\\(-1\\)", "\\(1\\)", "\\(-\\tfrac{1}{3}\\)", "\\(\\tfrac{1}{3}\\)"],
+      correctIndex: 0  // (1) -1
+    },
+    {
+      condition: "이차방정식 \\( 3x^2 + 3x + 1 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha\\beta\\)의 값은 얼마인가?",
+      choices: ["\\(\\tfrac{1}{3}\\)", "\\(-1\\)", "\\(-\\tfrac{1}{3}\\)", "\\(1\\)"],
+      correctIndex: 0  // (1) 1/3
+    },
+    {
+      condition: "이차방정식 \\( 2x^2 - 5x - 3 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha + \\beta\\)의 값은 얼마인가?",
+      choices: ["\\(-\\tfrac{5}{2}\\)", "\\(\\tfrac{5}{2}\\)", "\\(\\tfrac{3}{5}\\)", "\\(-\\tfrac{3}{2}\\)"],
+      correctIndex: 1  // (2) 5/2
+    },
+    {
+      condition: "이차방정식 \\( 2x^2 - 5x - 3 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha\\beta\\)의 값은 얼마인가?",
+      choices: ["\\(-\\tfrac{3}{2}\\)", "\\(\\tfrac{3}{2}\\)", "\\(-\\tfrac{5}{2}\\)", "\\(\\tfrac{5}{2}\\)"],
+      correctIndex: 0  // (1) -3/2
+    },
+    {
+      condition: "이차방정식 \\( 2x^2 - 3x + 5 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha + \\beta\\)의 값은 얼마인가?",
+      choices: ["\\(\\tfrac{3}{2}\\)", "\\(-\\tfrac{3}{2}\\)", "\\(\\tfrac{5}{2}\\)", "\\(-\\tfrac{5}{2}\\)"],
+      correctIndex: 0  // (1) 3/2
+    },
+    {
+      condition: "이차방정식 \\( 2x^2 - 3x + 5 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha\\beta\\)의 값은 얼마인가?",
+      choices: ["\\(\\tfrac{5}{2}\\)", "\\(-\\tfrac{5}{2}\\)", "\\(-\\tfrac{3}{2}\\)", "\\(\\tfrac{3}{2}\\)"],
+      correctIndex: 0  // (1) 5/2
+    },
+    {
+      condition: "이차방정식 \\( 3x^2 + 3x - 1 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha + \\beta\\)의 값은 얼마인가?",
+      choices: ["\\(-1\\)", "\\(\\tfrac{1}{3}\\)", "\\(\\tfrac{1}{-3}\\)", "\\(1\\)"],
+      correctIndex: 0  // (1) -1
+    },
+    {
+      condition: "이차방정식 \\( 3x^2 + 3x - 1 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha\\beta\\)의 값은 얼마인가?",
+      choices: ["\\(\\tfrac{1}{-3}\\)", "\\(-\\tfrac{1}{3}\\)", "\\(-1\\)", "\\(\\tfrac{1}{3}\\)"],
+      correctIndex: 1  // (2) -1/3
+    },
+    {
+      condition: "이차방정식 \\( 3x^2 - x = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha + \\beta\\)의 값은 얼마인가?",
+      choices: ["\\(\\tfrac{1}{3}\\)", "\\(-\\tfrac{1}{3}\\)", "\\(0\\)", "\\(1\\)"],
+      correctIndex: 0  // (1) 1/3
+    },
+    {
+      condition: "이차방정식 \\( 3x^2 - x = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha\\beta\\)의 값은 얼마인가?",
+      choices: ["\\(1\\)", "\\(0\\)", "\\(\\tfrac{1}{3}\\)", "\\(-\\tfrac{1}{3}\\)"],
+      correctIndex: 1  // (2) 0
+    },
+    {
+      condition: "이차방정식 \\( 2x^2 - 3x = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha + \\beta\\)의 값은 얼마인가?",
+      choices: ["\\(\\tfrac{3}{2}\\)", "\\(-\\tfrac{3}{2}\\)", "\\(0\\)", "\\(1\\)"],
+      correctIndex: 0  // (1) 3/2
+    },
+    {
+      condition: "이차방정식 \\( 2x^2 - 3x = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha\\beta\\)의 값은 얼마인가?",
+      choices: ["\\(\\tfrac{3}{2}\\)", "\\(-\\tfrac{3}{2}\\)", "\\(0\\)", "\\(-\\tfrac{2}{3}\\)"],
+      correctIndex: 2  // (3) 0
+    },
+    {
+      condition: "이차방정식 \\( x^2 + 9 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha + \\beta\\)의 값은 얼마인가?",
+      choices: ["\\(0\\)", "\\(9\\)", "\\(-9\\)", "\\(3\\)"],
+      correctIndex: 0  // (1) 0
+    },
+    {
+      condition: "이차방정식 \\( x^2 + 9 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha\\beta\\)의 값은 얼마인가?",
+      choices: ["\\(-9\\)", "\\(9\\)", "\\(3\\)", "\\(-3\\)"],
+      correctIndex: 1  // (2) 9
+    },
+    {
+      condition: "이차방정식 \\( x^2 - x + 2 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha + \\beta\\)의 값은 얼마인가?",
+      choices: ["\\(-1\\)", "\\(1\\)", "\\(2\\)", "\\(-2\\)"],
+      correctIndex: 1  // (2) 1
+    },
+    {
+      condition: "이차방정식 \\( x^2 - x + 2 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha\\beta\\)의 값은 얼마인가?",
+      choices: ["\\(2\\)", "\\(-2\\)", "\\(1\\)", "\\(-1\\)"],
+      correctIndex: 0  // (1) 2
+    },
+    {
+      condition: "이차방정식 \\( x^2 - x + 2 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha^2 + \\beta^2\\)의 값은 얼마인가?",
+      choices: ["\\(-3\\)", "\\(3\\)", "\\(5\\)", "\\(-5\\)"],
+      correctIndex: 0  // (1) -3
+    },
+    {
+      condition: "이차방정식 \\( x^2 - x + 2 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\dfrac{1}{\\alpha} + \\dfrac{1}{\\beta}\\)의 값은 얼마인가?",
+      choices: ["\\(1\\)", "\\(-1\\)", "\\(\\tfrac{1}{2}\\)", "\\(-\\tfrac{1}{2}\\)"],
+      correctIndex: 2  // (3) 1/2
+    },
+    {
+      condition: "이차방정식 \\( x^2 - x + 2 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\((\\alpha - 1)(\\beta - 1)\\)의 값은 얼마인가?",
+      choices: ["\\(1\\)", "\\(0\\)", "\\(2\\)", "\\(-2\\)"],
+      correctIndex: 2  // (3) 2
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 3x + 1 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha + \\beta\\)의 값은 얼마인가?",
+      choices: ["\\(-3\\)", "\\(3\\)", "\\(-1\\)", "\\(1\\)"],
+      correctIndex: 1  // (2) 3
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 3x + 1 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha\\beta\\)의 값은 얼마인가?",
+      choices: ["\\(3\\)", "\\(-3\\)", "\\(1\\)", "\\(-1\\)"],
+      correctIndex: 2  // (3) 1
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 3x + 1 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha^2 + \\beta^2\\)의 값은 얼마인가?",
+      choices: ["\\(9\\)", "\\(7\\)", "\\(-7\\)", "\\(-9\\)"],
+      correctIndex: 1  // (2) 7
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 3x + 1 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\dfrac{1}{\\alpha} + \\dfrac{1}{\\beta}\\)의 값은 얼마인가?",
+      choices: ["\\(1\\)", "\\(-1\\)", "\\(3\\)", "\\(-3\\)"],
+      correctIndex: 2  // (3) 3
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 3x + 1 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha^3 \\beta + \\alpha \\beta^3\\)의 값은 얼마인가?",
+      choices: ["\\(1\\)", "\\(7\\)", "\\(-7\\)", "\\(9\\)"],
+      correctIndex: 1  // (2) 7
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 2x - 3 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha + \\beta\\)의 값은 얼마인가?",
+      choices: ["\\(2\\)", "\\(-2\\)", "\\(3\\)", "\\(-3\\)"],
+      correctIndex: 0  // (1) 2
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 2x - 3 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha\\beta\\)의 값은 얼마인가?",
+      choices: ["\\(3\\)", "\\(-3\\)", "\\(2\\)", "\\(-2\\)"],
+      correctIndex: 1  // (2) -3
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 2x - 3 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha^2 + \\beta^2\\)의 값은 얼마인가?",
+      choices: ["\\(4\\)", "\\(10\\)", "\\(-4\\)", "\\(-10\\)"],
+      correctIndex: 1  // (2) 10
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 2x - 3 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\dfrac{1}{\\alpha} + \\dfrac{1}{\\beta}\\)의 값은 얼마인가?",
+      choices: ["\\(-\\tfrac{1}{3}\\)", "\\(\\tfrac{1}{3}\\)", "\\(-\\tfrac{2}{3}\\)", "\\(\\tfrac{2}{3}\\)"],
+      correctIndex: 2  // (3) -2/3
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 2x - 3 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\((\\alpha + 1)(\\beta + 1)\\)의 값은 얼마인가?",
+      choices: ["\\(-1\\)", "\\(0\\)", "\\(1\\)", "\\(-3\\)"],
+      correctIndex: 1  // (2) 0
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 2x - 3 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\((\\alpha - \\beta)^2\\)의 값은 얼마인가?",
+      choices: ["\\(4\\)", "\\(16\\)", "\\(-4\\)", "\\(-16\\)"],
+      correctIndex: 1  // (2) 16
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 2x - 3 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\dfrac{\\beta}{\\alpha} + \\dfrac{\\alpha}{\\beta}\\)의 값은 얼마인가?",
+      choices: ["\\(\\tfrac{10}{3}\\)", "\\(-\\tfrac{10}{3}\\)", "\\(\\tfrac{2}{3}\\)", "\\(-\\tfrac{2}{3}\\)"],
+      correctIndex: 1  // (2) -10/3
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 2x - 3 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha^3\\beta + \\alpha\\beta^3\\)의 값은 얼마인가?",
+      choices: ["\\(-6\\)", "\\(6\\)", "\\(-30\\)", "\\(30\\)"],
+      correctIndex: 2  // (3) -30
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 2x - 3 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\(\\alpha^3 + \\beta^3\\)의 값은 얼마인가?",
+      choices: ["\\(8\\)", "\\(10\\)", "\\(26\\)", "\\(-26\\)"],
+      correctIndex: 2  // (3) 26
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 2x - 3 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\((\\alpha^2 - 2\\alpha)(\\beta^2 - 2\\beta)\\)의 값은 얼마인가?",
+      choices: ["\\(9\\)", "\\(-9\\)", "\\(12\\)", "\\(-12\\)"],
+      correctIndex: 0  // (1) 9
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 2x - 3 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\((\\alpha^2 + \\alpha + 4)(\\beta^2 + \\beta + 4)\\)의 값은 얼마인가?",
+      choices: ["\\(16\\)", "\\(32\\)", "\\(64\\)", "\\(-64\\)"],
+      correctIndex: 2  // (3) 64
+    },
+    {
+      condition: "이차방정식 \\( x^2 - 2x - 3 = 0 \\)의 두 근 \\(\\alpha,\\beta\\)에 대하여, \\((\\alpha^2 - \\alpha + 2)(\\beta^2 - \\beta + 2)\\)의 값은 얼마인가?",
+      choices: ["\\(28\\)", "\\(32\\)", "\\(-28\\)", "\\(-32\\)"],
+      correctIndex: 1  // (2) 32
+    }
+  ];
+
+  // ---------------------------------------------
+  //  2) 난이도별 설정
+  // ---------------------------------------------
+  const timePerDifficulty = {
+    highest: 20,
+    high: 30,
+    mid: 40,
+    low: Infinity // 제한 없음
+  };
+  const scorePerDifficulty = {
+    highest: 20,
+    high: 15,
+    mid: 13,
+    low: 10
+  };
+
+  // ---------------------------------------------
+  //  3) 전역 변수
+  // ---------------------------------------------
+  let currentQuestions = [];      // 문제들(처음에 한 바퀴 돌 차례)
+  let askedCount = 0;             // 이미 낸 문제 수(처음 48문제 기준)
+  let inEndlessMode = false;      // 한 바퀴 다 끝낸 후 무한모드
+  let currentQuestionIndex = -1;  // 현재 문제의 index(위 배열 참조)
+  let lives = 3;
+  let score = 0;
+  let startTime = null;           // 게임 시작 시각
+  let gameTimer = null;           // 전체 경과시간 타이머
+  let questionTimer = null;       // 한 문제당 타이머
+  let remainingTime = 0;          // 현재 문제 남은시간
+  let selectedDifficulty = "low"; // 선택 난이도
+  let playerName = "";
+  let totalElapsedSeconds = 0;
+
+  // ---------------------------------------------
+  //  4) 유틸 함수
+  // ---------------------------------------------
+  function shuffleArray(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+  }
+
+  function startGame() {
+    playerName = document.getElementById("playerName").value.trim();
+    selectedDifficulty = document.getElementById("difficulty").value;
+
+    // 이름이 없으면 중단
+    if (!playerName) {
+      alert("이름을 입력하세요!");
+      return;
+    }
+
+    // 화면 전환
+    document.getElementById("start-screen").classList.add("hidden");
+    document.getElementById("game-screen").classList.remove("hidden");
+
+    lives = 3;
+    score = 0;
+    askedCount = 0;
+    inEndlessMode = false;
+
+    document.getElementById("lives").textContent = lives;
+    document.getElementById("score").textContent = score;
+
+    // 문제 배열을 복제 후 섞음 (한 바퀴용)
+    currentQuestions = [...questionData];
+    shuffleArray(currentQuestions);
+
+    // 전체 시간 타이머 시작
+    startTime = new Date();
+    gameTimer = setInterval(updateElapsedTime, 1000);
+
+    // 첫 문제 출제
+    showNextQuestion();
+  }
+
+  // 전체 경과시간 표시
+  function updateElapsedTime() {
+    const now = new Date();
+    const diff = Math.floor((now - startTime) / 1000);
+    totalElapsedSeconds = diff;
+    document.getElementById("elapsed-time").textContent = diff;
+  }
+
+  // 남은 시간(에너지바) 업데이트
+  function updateEnergyBar() {
+    const bar = document.getElementById("energyBar");
+    const fill = document.getElementById("energyFill");
+    if (selectedDifficulty === "low") {
+      // 하 난이도 => 무제한
+      fill.style.width = "100%";
+      return;
+    }
+    // 남은 시간 비율
+    let ratio = remainingTime / timePerDifficulty[selectedDifficulty];
+    if (ratio < 0) ratio = 0;
+    fill.style.width = (ratio * 100) + "%";
+  }
+
+  function showNextQuestion() {
+    // 만약 라이프가 0 이하이면 게임 종료
+    if (lives <= 0) {
+      endGame();
+      return;
+    }
+
+    // 아직 첫바퀴가 남았으면 그 중 하나를 꺼내서
+    if (!inEndlessMode) {
+      askedCount++;
+      if (askedCount > currentQuestions.length) {
+        // 한 바퀴 완료 => 무한모드로 전환
+        inEndlessMode = true;
+      }
+    }
+
+    let qObj = null;
+    if (!inEndlessMode) {
+      // 한 바퀴 내에서
+      currentQuestionIndex = askedCount - 1; // 0-based
+      qObj = currentQuestions[currentQuestionIndex];
+    } else {
+      // 무한모드: 아무거나
+      const randIndex = Math.floor(Math.random() * questionData.length);
+      qObj = questionData[randIndex];
+    }
+
+    if (!qObj) {
+      // 혹시 문제 객체가 없으면 끝 (이론적으론 발생X)
+      endGame();
+      return;
+    }
+
+    // 문제 표시
+    document.getElementById("question-text").innerHTML =
+      "<b>[조건]</b> " + qObj.condition + "<br>"
+      + "위에 대하여, 정답을 고르시오.";
+    // 보기 셔플
+    const indices = [0,1,2,3];
+    shuffleArray(indices);
+    const choiceBox = document.getElementById("choices-container");
+    choiceBox.innerHTML = "";
+
+    // 한 문제 제한시간 세팅
+    if (selectedDifficulty === "low") {
+      remainingTime = Infinity;
+    } else {
+      remainingTime = timePerDifficulty[selectedDifficulty];
+    }
+    clearInterval(questionTimer);
+    questionTimer = setInterval(()=>{
+      if (selectedDifficulty === "low") {
+        updateEnergyBar(); // 무제한이므로 항상 100%
+      } else {
+        remainingTime--;
+        updateEnergyBar();
+        if (remainingTime <= 0) {
+          // 시간 초과 => 기회 -1, 다음문제
+          lives--;
+          document.getElementById("lives").textContent = lives;
+          clearInterval(questionTimer);
+          alert("시간이 다 되었습니다! 기회 1 감소");
+          showNextQuestion();
+        }
+      }
+    },1000);
+    updateEnergyBar();
+
+    // 보기 DOM 만들기
+    indices.forEach((i) => {
+      const btn = document.createElement("button");
+      btn.innerHTML = qObj.choices[i];
+      btn.onclick = () => {
+        clearInterval(questionTimer);
+        checkAnswer(qObj, i, qObj.correctIndex);
+      };
+      choiceBox.appendChild(btn);
+    });
+
+    // 수식 재렌더링
+    MathJax.typeset();
+  }
+
+  function checkAnswer(qObj, chosenIndex, correctIndex) {
+    if (chosenIndex === correctIndex) {
+      // 정답
+      alert("정답입니다!");
+      score += scorePerDifficulty[selectedDifficulty];
+      document.getElementById("score").textContent = score;
+    } else {
+      // 오답
+      lives--;
+      document.getElementById("lives").textContent = lives;
+      alert("오답입니다! 정답은: " + qObj.choices[correctIndex]);
+      if (lives <= 0) {
+        endGame();
+        return;
+      }
+    }
+
+    // 3번 틀리면 종료 => lives<=0 처리 완료
+    if (lives <= 0) {
+      endGame();
+      return;
+    }
+
+    showNextQuestion();
+  }
+
+  function endGame() {
+    clearInterval(gameTimer);
+    clearInterval(questionTimer);
+    // 게임화면 숨기고 엔드스크린 표시
+    document.getElementById("game-screen").classList.add("hidden");
+    document.getElementById("end-screen").classList.remove("hidden");
+    document.getElementById("final-score").textContent = score;
+  }
+
+  // ---------------------------------------------
+  //  5) 점수 전송 (서버 POST)
+  // ---------------------------------------------
+  function sendScore() {
+    const game = "근과 계수의 관계(곱셈법칙)";
+    const name = playerName;
+    const elapsedTime = totalElapsedSeconds;
+
+    saveData(game, name, score, elapsedTime);
+  }
+
+  // ---------------------------------------------
+  //  6) 서버전송 함수 (문제에서 제공한 코드 복사+수정)
+  // ---------------------------------------------
+  async function saveData(game, name, score, elapsedTime) {
+    const FUNCTION_URL = "https://us-central1-record-f420d.cloudfunctions.net/report";
+
+    const requestData = {
+      game,
+      name,
+      score: parseInt(score, 10),
+      elapsedTime: parseInt(elapsedTime, 10)
+    };
+
+    try {
+      const response = await fetch(FUNCTION_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      const responseData = await response.json();
+
+      if (response.ok) {
+        document.getElementById('response').innerText =
+          "성공: " + JSON.stringify(responseData, null, 2);
+      } else {
+        document.getElementById('response').innerText =
+          "오류: " + JSON.stringify(responseData, null, 2);
+      }
+    } catch (error) {
+      console.error('요청 실패:', error);
+      document.getElementById('response').innerText =
+        "네트워크 오류: " + error.message;
+    }
+  }
+</script>
+</body>
+</html>
